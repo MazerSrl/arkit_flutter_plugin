@@ -35,6 +35,9 @@ ARKitPlaneAnchor _$ARKitPlaneAnchorFromJson(Map json) => ARKitPlaneAnchor(
       json['nodeName'] as String?,
       json['identifier'] as String,
       const MatrixConverter().fromJson(json['transform'] as List),
+      (json['childNodes'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      json['cloudanchorid'] as String?,
+      json['ttl'] as int?,
     );
 
 Map<String, dynamic> _$ARKitPlaneAnchorToJson(ARKitPlaneAnchor instance) {
@@ -51,6 +54,9 @@ Map<String, dynamic> _$ARKitPlaneAnchorToJson(ARKitPlaneAnchor instance) {
   writeNotNull('transform', const MatrixConverter().toJson(instance.transform));
   writeNotNull('center', const Vector3Converter().toJson(instance.center));
   writeNotNull('extent', const Vector3Converter().toJson(instance.extent));
+  val['childNodes'] = instance.childNodes;
+  writeNotNull('cloudanchorid', instance.cloudanchorid);
+  writeNotNull('ttl', instance.ttl);
   return val;
 }
 

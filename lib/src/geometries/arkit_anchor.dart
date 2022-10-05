@@ -12,7 +12,7 @@ abstract class ARKitAnchor {
     this.nodeName,
     this.identifier,
     this.transform,
-  );
+    );
 
   factory ARKitAnchor.fromJson(Map<String, dynamic> arguments) {
     final type = arguments['anchorType'].toString();
@@ -66,17 +66,22 @@ class ARKitUnkownAnchor extends ARKitAnchor {
 /// Planes are defined in the X and Z direction, where Y is the surface’s normal.
 @JsonSerializable()
 class ARKitPlaneAnchor extends ARKitAnchor {
-  const ARKitPlaneAnchor(
+  ARKitPlaneAnchor(
     this.center,
     this.extent,
     String? nodeName,
     String identifier,
     Matrix4 transform,
-  ) : super(
-          nodeName,
-          identifier,
-          transform,
-        );
+    List<String>? childNodes,
+    this.cloudanchorid,
+    int? ttl,
+  ) : childNodes = childNodes ?? [],
+      ttl = ttl ?? 1,
+      super(
+        nodeName,
+        identifier,
+        transform,
+      );
 
   /// The center of the plane in the anchor’s coordinate space.
   @Vector3Converter()
@@ -85,6 +90,15 @@ class ARKitPlaneAnchor extends ARKitAnchor {
   /// The extent of the plane in the anchor’s coordinate space.
   @Vector3Converter()
   final Vector3 extent;
+
+  /// Names of ARNodes attached to this [APlaneRAnchor]
+  List<String> childNodes;
+
+  /// ID associated with the anchor after uploading it to the google cloud anchor API
+  String? cloudanchorid;
+
+  /// Time to live of the anchor: Determines how long the anchor is stored once it is uploaded to the google cloud anchor API (optional, defaults to 1 day (24hours))
+  int? ttl;
 
   static ARKitPlaneAnchor fromJson(Map<String, dynamic> json) =>
       _$ARKitPlaneAnchorFromJson(json);

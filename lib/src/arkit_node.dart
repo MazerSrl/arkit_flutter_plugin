@@ -1,3 +1,4 @@
+import 'package:arkit_plugin/arkit_plugin.dart';
 import 'package:arkit_plugin/src/geometries/arkit_geometry.dart';
 import 'package:arkit_plugin/src/light/arkit_light.dart';
 import 'package:arkit_plugin/src/physics/arkit_physics_body.dart';
@@ -117,4 +118,25 @@ class ARKitNode {
         'renderingOrder': renderingOrder,
         'isHidden': _boolValueNotifierConverter.toJson(isHidden),
       }..removeWhere((String k, dynamic v) => v == null);
+
+  static ARKitNode fromMap(Map<String, dynamic> map) {
+    return ARKitNode(
+      geometry: ARKitGeometry.fromJson(map['geometry']),
+      transformation: MatrixConverter().fromJson(map["transform"]),
+      physicsBody: ARKitPhysicsBody.fromJson(map['physicsBody']),
+      light: ARKitLight.fromJson(map['light']),
+      name: map['name'] as String,
+      renderingOrder: map['renderingOrder'] as int,
+      isHidden: map['isHidden'] as bool,
+      // FC TODO CHECK
+      // position: null,
+      // scale: null,
+      // rotation: null,
+      // eulerAngles: null,
+      // FC TODO TO ADD
+      // data: Map<String, dynamic>.from(map["data"]));
+    );
+
+  }
+
 }

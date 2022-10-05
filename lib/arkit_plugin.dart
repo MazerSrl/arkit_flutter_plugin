@@ -43,3 +43,5 @@ export 'package:arkit_plugin/src/widget/arkit_configuration.dart';
 export 'package:arkit_plugin/src/widget/arkit_scene_view.dart';
 export 'package:arkit_plugin/src/widget/arkit_reference_image.dart';
 export 'package:arkit_plugin/src/widget/arkit_world_alignment.dart';
+export 'package:arkit_plugin/src/managers/ar_anchor_manager.dart';
+export 'package:arkit_plugin/src/managers/ar_location_manager.dart';

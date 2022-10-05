@@ -234,6 +234,7 @@ class ARKitController {
     int maximumNumberOfTrackedImages,
     this.debug,
   ) {
+    _id = id;
     _channel = MethodChannel('arkit_$id');
     _channel.setMethodCallHandler(_platformCallHandler);
     _channel.invokeMethod<void>('init', {
@@ -259,6 +260,10 @@ class ARKitController {
   }
 
   late MethodChannel _channel;
+
+  // Expose controller id read-only
+  late int _id;
+  int get id => _id;
 
   /// This is called when a session fails.
   /// On failure the session will be paused.

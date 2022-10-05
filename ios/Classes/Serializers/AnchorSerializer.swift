@@ -1,5 +1,18 @@
 import Foundation
 import ARKit
+import ARCoreCloudAnchors
+
+func serializeCloudAnchor(anchor: ARAnchor, anchorNode: SCNNode?, ganchor: GARAnchor, name: String?) -> Dictionary<String, Any?> {
+    var serializedAnchor = Dictionary<String, Any?>()
+
+    serializedAnchor["type"] = 0 // index for plane anchors
+    serializedAnchor["name"] = name
+    serializedAnchor["cloudanchorid"] = ganchor.cloudIdentifier
+    serializedAnchor["transformation"] = serializeMatrix(anchor.transform)
+    serializedAnchor["childNodes"] = anchorNode?.childNodes.map{$0.name}
+
+    return serializedAnchor
+}
 
 func serializeAnchor(_ anchor: ARAnchor) -> Dictionary<String, Any> {
     var params = [

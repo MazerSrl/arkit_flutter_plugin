@@ -1,5 +1,6 @@
 import 'package:arkit_plugin_example/body_tracking_page.dart';
 import 'package:arkit_plugin_example/check_support_page.dart';
+import 'package:arkit_plugin_example/cloudanchorexample.dart';
 import 'package:arkit_plugin_example/custom_animation_page.dart';
 import 'package:arkit_plugin_example/custom_object_page.dart';
 import 'package:arkit_plugin_example/distance_tracking_page.dart';
@@ -197,6 +198,13 @@ class MyApp extends StatelessWidget {
         Icons.camera,
         () => Navigator.of(context)
             .push<void>(MaterialPageRoute(builder: (c) => SnapshotScenePage())),
+      ),
+      Sample(
+          'Cloud Anchors',
+          'Place and retrieve 3D objects using the Google Cloud Anchor API',
+          Icons.account_tree,
+          () => Navigator.of(context)
+              .push<void>(MaterialPageRoute(builder: (c) => CloudAnchorWidget()))
       ),
     ];
 

@@ -15,7 +15,11 @@ A new flutter plugin project.
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
-  s.platform = :ios, '11.0'
+  s.dependency 'ARCore/CloudAnchors'
+#   , '~> 1.32.0'
+  s.dependency 'GLTFSceneKit'
+  s.dependency 'SwiftJWT'
+  s.platform = :ios, '13.0'
 
   # Flutter.framework does not contain a i386 slice. Only x86_64 simulators are supported.
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'VALID_ARCHS[sdk=iphonesimulator*]' => 'x86_64' }
