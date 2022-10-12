@@ -82,10 +82,14 @@ class ARAnchorManager {
   }
 
   /// Add given anchor to the underlying AR scene
-  Future<bool?> addAnchor(ARKitAnchor anchor) async {
+  Future<bool?> addAnchor(ARKitPlaneAnchor anchor) async {
     try {
-      return await _channel.invokeMethod<bool>('addAnchor', anchor.toJson());
-    } on PlatformException {
+      var jsonAnchor = anchor.toJson();
+      jsonAnchor['type'] = 0;
+      jsonAnchor['name'] = anchor.nodeName ?? anchor.identifier;
+      return await _channel.invokeMethod<bool>('addAnchor', jsonAnchor);
+    } on PlatformException catch (e) {
+      print('FC DART ANCHOR PLATFORM EXCEPTION: ' + (e.message ?? 'NONE'));
       return false;
     }
   }

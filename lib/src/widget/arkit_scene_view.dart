@@ -324,6 +324,30 @@ class ARKitController {
     _channel.invokeMethod<void>('dispose');
   }
 
+  Future<bool?> addNode(ARKitNode node, {ARKitPlaneAnchor? planeAnchor}) async {
+    try {
+      node.transformNotifier.addListener(() {
+        _channel.invokeMethod<void>('transformationChanged', {
+          'name': node.name,
+          'transformation':
+          MatrixValueNotifierConverter().toJson(node.transformNotifier)
+        });
+      });
+      if (planeAnchor != null) {
+        planeAnchor.childNodes.add(node.name);
+        return await _channel.invokeMethod<bool>('addNodeToPlaneAnchor',
+            {'node': node.toMap(), 'anchor': planeAnchor.toJson()});
+      } else {
+        // FC TODO CHECK
+        await add(node);
+        return true;
+        // return await _channel.invokeMethod<bool>('addNode', node.toMap());
+      }
+    } on PlatformException {
+      return false;
+    }
+  }
+
   Future<void> add(ARKitNode node, {String? parentNodeName}) {
     final params = _addParentNodeNameToParams(node.toMap(), parentNodeName);
     _subsribeToChanges(node);

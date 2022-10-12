@@ -1,6 +1,7 @@
 import 'package:arkit_plugin/src/geometries/arkit_face.dart';
 import 'package:arkit_plugin/src/geometries/arkit_skeleton.dart';
 import 'package:arkit_plugin/src/utils/json_converters.dart';
+import 'package:flutter/widgets.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:vector_math/vector_math_64.dart';
 
@@ -78,7 +79,7 @@ class ARKitPlaneAnchor extends ARKitAnchor {
   ) : childNodes = childNodes ?? [],
       ttl = ttl ?? 1,
       super(
-        nodeName,
+        nodeName = nodeName ?? UniqueKey().toString(),
         identifier,
         transform,
       );

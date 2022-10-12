@@ -5,7 +5,7 @@ import ARKit
 import Combine
 import ARCoreCloudAnchors
 
-class FlutterArkitView: NSObject, FlutterPlatformView {
+class FlutterArkitView: NSObject, FlutterPlatformView, ARSessionDelegate {
     let sceneView: ARSCNView
     let channel: FlutterMethodChannel
     let anchorManagerChannel: FlutterMethodChannel
@@ -17,6 +17,9 @@ class FlutterArkitView: NSObject, FlutterPlatformView {
     var anchorCollection = [String: ARAnchor]() //Used to bookkeep all anchors created by Flutter calls
     private var arcoreSession: GARSession? = nil
     private var arcoreMode: Bool = false
+    private var configurationTracking: ARWorldTrackingConfiguration!
+    let modelBuilder = ArModelBuilder()
+    var cancellableCollection = Set<AnyCancellable>() //Used to store all cancellables in (needed for working with Futures)
 
     init(withFrame frame: CGRect, viewIdentifier viewId: Int64, messenger msg: FlutterBinaryMessenger) {
         self.sceneView = ARSCNView(frame: frame)
@@ -25,14 +28,29 @@ class FlutterArkitView: NSObject, FlutterPlatformView {
 
         super.init()
         
+        let configurationTracking = ARWorldTrackingConfiguration() // Create default configuration before initializeARView is called
         self.sceneView.delegate = self
+        self.sceneView.session.run(configurationTracking)
+        self.sceneView.session.delegate = self
+
         self.channel.setMethodCallHandler(self.onMethodCalled)
         self.anchorManagerChannel.setMethodCallHandler(self.onAnchorMethodCalled)
     }
-    
+
+    func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        if (arcoreMode) {
+            do {
+                try arcoreSession!.update(frame)
+            } catch {
+                print(error)
+            }
+        }
+    }
+
+
     func view() -> UIView { return sceneView }
     
-    func onMethodCalled(_ call :FlutterMethodCall, _ result:FlutterResult) {
+    func onMethodCalled(_ call :FlutterMethodCall, _ result: @escaping FlutterResult) {
         let arguments = call.arguments as? Dictionary<String, Any>
         
         if configuration == nil && call.method != "init" {
@@ -131,6 +149,13 @@ class FlutterArkitView: NSObject, FlutterPlatformView {
         case "snapshot":
             onGetSnapshot(result)
             break
+        case "addNodeToPlaneAnchor":
+            if let dict_node = arguments!["node"] as? Dictionary<String, Any>, let dict_anchor = arguments!["anchor"] as? Dictionary<String, Any> {
+                addNode(dict_node: dict_node, dict_anchor: dict_anchor).sink(receiveCompletion: {completion in }, receiveValue: { val in
+                       result(val)
+                    }).store(in: &self.cancellableCollection)
+            }
+            break
         default:
             result(FlutterMethodNotImplemented)
             break
@@ -178,6 +203,7 @@ class FlutterArkitView: NSObject, FlutterPlatformView {
                 } else {
                     print("Error uploading anchor, state: \(parent.decodeCloudAnchorState(state: cloudState))")
                     // FC TODO parent.sessionManagerChannel.invokeMethod("onError", arguments: ["Error uploading anchor, state: \(parent.decodeCloudAnchorState(state: cloudState))"])
+                    parent.anchorManagerChannel.invokeMethod("onError", arguments: ["Error uploading anchor, state: \(parent.decodeCloudAnchorState(state: cloudState))"])
                     return
                 }
             }
@@ -196,18 +222,20 @@ class FlutterArkitView: NSObject, FlutterPlatformView {
                 if (cloudState == GARCloudAnchorState.success) {
                     let newAnchor = ARAnchor(transform: anchor!.transform)
                     // Register new anchor on the Flutter side of the plugin
-                    parent.anchorManagerChannel.invokeMethod("onAnchorDownloadSuccess", arguments: serializeCloudAnchor(anchor: newAnchor, anchorNode: nil, ganchor: anchor!, name: anchorName), result: { result in
+                    self.parent.anchorManagerChannel.invokeMethod("onAnchorDownloadSuccess", arguments: serializeCloudAnchor(anchor: newAnchor, anchorNode: nil, ganchor: anchor!, name: anchorName), result: { result in
                         if let anchorName = result as? String {
                             self.parent.sceneView.session.add(anchor: newAnchor)
                             self.parent.anchorCollection[anchorName] = newAnchor
                         } else {
                             // FC TODO self.parent.sessionManagerChannel.invokeMethod("onError", arguments: ["Error while registering downloaded anchor at the AR Flutter plugin Light"])
+                            self.parent.anchorManagerChannel.invokeMethod("onError", arguments: ["Error while registering downloaded anchor at the AR Flutter plugin Light"])
                         }
 
                     })
                 } else {
                     print("Error downloading anchor, state \(cloudState)")
                     // FC TODO parent.sessionManagerChannel.invokeMethod("onError", arguments: ["Error downloading anchor, state \(cloudState)"])
+                    self.parent.anchorManagerChannel.invokeMethod("onError", arguments: ["Error downloading anchor, state \(cloudState)"])
                     return
                 }
             }
@@ -253,23 +281,27 @@ class FlutterArkitView: NSObject, FlutterPlatformView {
         switch call.method {
             case "init":
                 // FC TODO self.objectManagerChannel.invokeMethod("onError", arguments: ["ObjectTEST from iOS"])
+                self.anchorManagerChannel.invokeMethod("onError", arguments: ["ObjectTEST from iOS"])
                 result(nil)
                 break
             case "addAnchor":
                 if let type = arguments!["type"] as? Int {
                     switch type {
                     case 0: //Plane Anchor
-                        if let transform = arguments!["transformation"] as? Array<NSNumber>, let name = arguments!["name"] as? String {
+                        if let transform = arguments!["transform"] as? Array<NSNumber>, let name = arguments!["name"] as? String {
                             addPlaneAnchor(transform: transform, name: name)
                             result(true)
                         }
+                        print("FC SWIFT - addAnchor with wrong arguments: \(arguments)")
                         result(false)
                         break
                     default:
+                        print("FC SWIFT - addAnchor with wrong type: \(type)")
                         result(false)
 
                     }
                 }
+                print("FC SWIFT - addAnchor without type argument")
                 result(nil)
                 break
             case "removeAnchor":
@@ -279,7 +311,6 @@ class FlutterArkitView: NSObject, FlutterPlatformView {
                 break
             case "initGoogleCloudAnchorMode":
                 arcoreSession = try! GARSession.session()
-
                 if (arcoreSession != nil){
                     let configuration = GARSessionConfiguration();
                     configuration.cloudAnchorMode = .enabled;
@@ -294,14 +325,18 @@ class FlutterArkitView: NSObject, FlutterPlatformView {
                         arcoreMode = true
                     } else {
                         // FC TODO sessionManagerChannel.invokeMethod("onError", arguments: ["Error generating JWT, have you added cloudAnchorKey.json into the example/ios/Runner directory?"])
+                        print ("FC SWIFT ERROR: Error generating JWT, have you added cloudAnchorKey.json into the example/ios/Runner directory?")
+                        anchorManagerChannel.invokeMethod("onError", arguments: ["Error generating JWT, have you added cloudAnchorKey.json into the example/ios/Runner directory?"])
                     }
                 } else {
                     // FC TODO sessionManagerChannel.invokeMethod("onError", arguments: ["Error initializing Google AR Session"])
+                    print ("FC SWIFT ERROR: Error initializing Google AR Session")
+                    anchorManagerChannel.invokeMethod("onError", arguments: ["Error initializing Google AR Session"])
                 }
 
                 break
             case "uploadAnchor":
-                if let anchorName = arguments!["name"] as? String, let anchor = anchorCollection[anchorName] {
+                if let anchorName = arguments!["nodeName"] as? String, let anchor = anchorCollection[anchorName] {
                     print("---------------- HOSTING INITIATED ------------------")
                     if let ttl = arguments!["ttl"] as? Int {
                         cloudAnchorHandler?.hostCloudAnchorWithTtl(anchorName: anchorName, anchor: anchor, listener: cloudAnchorUploadedListener(parent: self), ttl: ttl)

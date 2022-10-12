@@ -1,12 +1,14 @@
 import 'package:arkit_plugin/arkit_plugin.dart';
 import 'package:arkit_plugin_example/firebase_options.dart';
+import 'package:arkit_plugin_example/physics_page.dart';
 import 'package:flutter/material.dart';
-import 'package:vector_math/vector_math_64.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geoflutterfire/geoflutterfire.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:collection/collection.dart';
+import 'dart:math' as math;
+import 'package:vector_math/vector_math_64.dart' as vector;
 
 class CloudAnchorWidget extends StatefulWidget {
   CloudAnchorWidget({Key? key}) : super(key: key);
@@ -20,6 +22,10 @@ class _CloudAnchorWidgetState extends State<CloudAnchorWidget> {
   bool _error = false;
   FirebaseManager firebaseManager = FirebaseManager();
   Map anchorsInDownloadProgress = <String, Map>{};
+  // From PlaneDetectionPage...
+  String? anchorId;
+  ARKitPlane? plane;
+  ARKitNode? node;
 
   late ARAnchorManager arAnchorManager;
   late ARLocationManager arLocationManager;
@@ -90,6 +96,8 @@ class _CloudAnchorWidgetState extends State<CloudAnchorWidget> {
                 onARKitViewCreated: onARKitViewCreated,
                 planeDetection: ARPlaneDetection.horizontalAndVertical,
                 showFeaturePoints: true,
+                showWorldOrigin: true,
+                enableTapRecognizer: true,
               ),
           Align(
             alignment: FractionalOffset.bottomCenter,
@@ -121,21 +129,48 @@ class _CloudAnchorWidgetState extends State<CloudAnchorWidget> {
         ])));
   }
 
-  void onCommonTap(List<ARKitTestResult> hits) {
-    /* // FC TODO CHECK
-    this.arSessionManager.onPlaneOrPointTap = onPlaneOrPointTapped;
-    this.arObjectManager.onNodeTap = onNodeTapped;
-     */
-    final planeHitTestResults = hits.where((e) => (e.type == ARKitHitTestResultType.existingPlaneUsingGeometry || e.type == ARKitHitTestResultType.existingPlaneUsingExtent)).toList();
-    if (planeHitTestResults.isNotEmpty) {
-      onPlaneOrPointTapped(planeHitTestResults);
+  Future<void> onCommonTap(List<ARKitTestResult> hits) async {
+    final planeHitTestResults = hits.firstWhereOrNull((e) => (e.type == ARKitHitTestResultType.existingPlaneUsingExtent));
+    if (planeHitTestResults != null) {
+      await onPlaneOrPointTapped(planeHitTestResults);
     }
+  }
 
-    final nodeHitTestResults = hits.where((e) => (e.type == ARKitHitTestResultType.featurePoint)).toList();
-    if (nodeHitTestResults.isNotEmpty) {
-      final nodeList = nodeHitTestResults.map((e) => e.anchor?.nodeName ?? e.anchor?.identifier ?? 'unknown').toList();
-      onNodeTapped(nodeList);
+  void _handleAddAnchor(ARKitAnchor anchor) {
+    if (!(anchor is ARKitPlaneAnchor)) {
+      return;
     }
+    _addPlane(arController, anchor);
+  }
+
+  void _handleUpdateAnchor(ARKitAnchor anchor) {
+    if (anchor.identifier != anchorId || anchor is! ARKitPlaneAnchor) {
+      return;
+    }
+    node?.position = vector.Vector3(anchor.center.x, 0, anchor.center.z);
+    plane?.width.value = anchor.extent.x;
+    plane?.height.value = anchor.extent.z;
+  }
+
+  void _addPlane(ARKitController controller, ARKitPlaneAnchor anchor) {
+    anchorId = anchor.identifier;
+    plane = ARKitPlane(
+      width: anchor.extent.x,
+      height: anchor.extent.z,
+      materials: [
+        ARKitMaterial(
+          transparency: 0.5,
+          diffuse: ARKitMaterialProperty.color(Colors.white),
+        )
+      ],
+    );
+
+    node = ARKitNode(
+      geometry: plane,
+      position: vector.Vector3(anchor.center.x, 0, anchor.center.z),
+      rotation: vector.Vector4(1, 0, 0, -math.pi / 2),
+    );
+    controller.add(node!, parentNodeName: anchor.nodeName);
   }
 
   void onARKitViewCreated(
@@ -144,6 +179,9 @@ class _CloudAnchorWidgetState extends State<CloudAnchorWidget> {
     arAnchorManager = ARAnchorManager(controller.id);
     arLocationManager = ARLocationManager();
     arAnchorManager.initGoogleCloudAnchorMode();
+
+    arController.onAddNodeForAnchor = _handleAddAnchor;
+    arController.onUpdateNodeForAnchor = _handleUpdateAnchor;
 
     arController.onARTap = onCommonTap;
     arAnchorManager.onAnchorUploaded = onAnchorUploaded;
@@ -194,11 +232,13 @@ class _CloudAnchorWidgetState extends State<CloudAnchorWidget> {
           {
             // FC TODO
             // this.arSessionManager.onError(error.toString());
+            print ('FC Error: ' + error.toString());
             break;
           }
       }
       // FC TODO
       // this.arSessionManager.onError(error.toString());
+      print ('FC Error: ' + error.toString());
     });
   }
 
@@ -223,49 +263,33 @@ class _CloudAnchorWidgetState extends State<CloudAnchorWidget> {
   Future<void> onNodeTapped(List<String> nodeNames) async {
     var foregroundNode =
         nodes.firstWhereOrNull((element) => element.name == nodeNames.first);
-    // FC TODO
-    // this.arSessionManager.onError(foregroundNode.data["onTapText"]);
   }
 
   Future<void> onPlaneOrPointTapped(
-      List<ARKitTestResult> hitTestResults) async {
-    var singleHitTestResult = hitTestResults.firstWhere(
-        // (hitTestResult) => hitTestResult.type == ARKitHitTestResultType.plane); // FC TODO CHECK Estimated or Existing plane !?
-        (hitTestResult) => hitTestResult.type == ARKitHitTestResultType.estimatedHorizontalPlane);
-    if (singleHitTestResult != null) {
-      var newAnchor = ARKitPlaneAnchor(Vector3.zero(), Vector3.zero(), '', '', singleHitTestResult.worldTransform, [], '', 2);
+      ARKitTestResult singleHitTestResult) async {
+
+    if (singleHitTestResult.anchor != null) {
+      var hit = singleHitTestResult.anchor as ARKitPlaneAnchor;
+      final ttl = 2; // FC TODO
+      var newAnchor = ARKitPlaneAnchor(hit.center, hit.extent, null, hit.identifier, singleHitTestResult.worldTransform, null, null, ttl);
       var didAddAnchor = await arAnchorManager.addAnchor(newAnchor) ?? false;
       if (didAddAnchor) {
         anchors.add(newAnchor);
         // Add note to anchor
-        var newNode = ARKitNode(
-          scale: Vector3(0.2, 0.2, 0.2),
-          position: Vector3(0.0, 0.0, 0.0),
-          rotation: Vector4(1.0, 0.0, 0.0, 0.0),
-            // FC TODO
-            // type: NodeType.webGLB,
-            // uri: "https://github.com/KhronosGroup/glTF-Sample-Models/raw/master/2.0/Duck/glTF-Binary/Duck.glb",
-            // data: {"onTapText": "Ouch, that hurt!"}
+        var newNode = ARKitReferenceNode(
+          url: 'models.scnassets/dash.dae',
+          scale: vector.Vector3.all(1),
+          position: vector.Vector3(0.0, 0.0, 0.0),
         );
 
-        await arController.add(newNode, parentNodeName: newAnchor.nodeName);
+        await arController.addNode(newNode, planeAnchor: newAnchor);
         nodes.add(newNode);
         setState(() {
           readyToUpload = true;
         });
 
-        /*
-        bool didAddNodeToAnchor = await this.arObjectManager.addNode(newNode, planeAnchor: newAnchor);
-        if (didAddNodeToAnchor) {
-          this.nodes.add(newNode);
-          setState(() {
-            readyToUpload = true;
-          });
-        } else {
-          this.arSessionManager.onError("Adding Node to Anchor failed");
-        }
-         */
       } else {
+        print ('FC Error: Adding Anchor failed');
         // FC TODO CHECK
         // this.arSessionManager.onError("Adding Anchor failed");
       }
@@ -294,6 +318,7 @@ class _CloudAnchorWidgetState extends State<CloudAnchorWidget> {
     });
 
     // FC TODO CHECK
+    print ('FC DEBUG: Upload successful');
     // this.arSessionManager.onError("Upload successful");
   }
 
@@ -334,6 +359,7 @@ class _CloudAnchorWidgetState extends State<CloudAnchorWidget> {
         readyToDownload = false;
       });
     } else {
+      print ("FC Error: Location updates not running, can't download anchors");
       // FC TODO CHECK
       // this.arSessionManager.onError("Location updates not running, can't download anchors");
     }
@@ -405,8 +431,10 @@ class FirebaseManager {
   }
 
   void uploadAnchor(ARKitAnchor anchor, {Position? currentLocation}) {
-    if (firestore == null) return;
-
+    if (firestore == null) {
+      print ("FC DEBUG ERROR: Uninitialized Firestore!");
+      return;
+    }
     var serializedAnchor = anchor.toJson();
     var expirationTime = DateTime.now().millisecondsSinceEpoch / 1000 +
         serializedAnchor['ttl'] * 24 * 60 * 60;
@@ -422,7 +450,7 @@ class FirebaseManager {
     anchorCollection
         .add(serializedAnchor)
         .then((value) =>
-            print('Successfully added anchor: ' + serializedAnchor['name']))
+        print('Successfully added anchor: ' + serializedAnchor['name']))
         .catchError((error) => print('Failed to add anchor: $error'));
   }
 

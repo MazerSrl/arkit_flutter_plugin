@@ -1,6 +1,32 @@
 import ARKit
+import Flutter
+import UIKit
+import Foundation
+import Combine
 
 extension FlutterArkitView {
+    func addNode(dict_node: Dictionary<String, Any>, dict_anchor: Dictionary<String, Any>? = nil) -> Future<Bool, Never> {
+        return Future {promise in
+            // Get path to given file system asset
+            let geo : Dictionary<String, Any>? = nil;
+            let geometry = createGeometry(geo, withDevice: self.sceneView.device)
+            let node = createNode(geometry, fromDict: dict_node, forDevice: self.sceneView.device)
+            if let anchorName = dict_anchor?["nodeName"] as? String {
+                if let anchor = self.anchorCollection[anchorName]{
+                    // Attach node to the top-level node of the specified anchor
+                    self.sceneView.node(for: anchor)?.addChildNode(node)
+                    promise(.success(true))
+                } else {
+                    promise(.success(false))
+                }
+            } else {
+                // Attach to top-level node of the scene
+                self.sceneView.scene.rootNode.addChildNode(node)
+                promise(.success(true))
+            }
+        }
+    }
+
     func onAddNode(_ arguments: Dictionary<String, Any>) {
         let geometryArguments = arguments["geometry"] as? Dictionary<String, Any>
         let geometry = createGeometry(geometryArguments, withDevice: sceneView.device)
